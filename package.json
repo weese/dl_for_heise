@@ -1,0 +1,31 @@
+{
+  "name": "dl_for_heise",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "This is a simple bash script to download magazines as PDF file from https://www.heise.de/select.",
+  "main": "download.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/weese/dl_for_heise.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/weese/dl_for_heise/issues"
+  },
+  "homepage": "https://github.com/weese/dl_for_heise#readme",
+  "dependencies": {
+    "axios": "^1.9.0",
+    "axios-cookiejar-support": "^6.0.2",
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "mkdirp": "^3.0.1",
+    "pdf-lib": "^1.17.1",
+    "puppeteer": "^24.8.2",
+    "tough-cookie": "^5.1.2"
+  }
+}
