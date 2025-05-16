@@ -89,8 +89,8 @@ const [magazine, startYear, endYear = startYear] = program.args;
   if (!fs.existsSync('cookiejar.json')) {
     console.log(chalk.red('cookiejar.json not found. Logging in...'));
     await login({
-      username,
-      password,
+      username: process.env.HEISE_USERNAME,
+      password: process.env.HEISE_PASSWORD,
       cookieJarPath: 'cookiejar.json',
     });
   } else {
@@ -114,8 +114,13 @@ const [magazine, startYear, endYear = startYear] = program.args;
       try {
         // Download thumbnail
         const thumbUrl = `https://heise.cloudimg.io/v7/_www-heise-de_/select/thumbnail/${magazine}/${year}/${issue}.jpg`;
+        const landingPage = `https://www.heise.de/select/${magazine}/archiv/${year}/${issue}`;
         if (await downloadFile(client, thumbUrl, `${basePath}.jpg`) == 404) {
-          continue;
+          console.warn(chalk.red(`Thumbnail not found: ${basePath}.jpg`));
+          // continue if also landing page doesn't exists
+          if (await downloadFile(client, landingPage, "test.html") == 404) {
+            continue;
+          }
         }
 
         // Fetch article numbers
