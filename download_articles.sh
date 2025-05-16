@@ -1,14 +1,15 @@
 #!/bin/bash
 
-# User Configuration
-email='name@example.com'
-password='nutella123'
+# Read credentials from .env file if it exists
+if [ -f ".env" ]; then
+    . ./.env
+fi
 
 minimum_pdf_size=5000 # minimum file size to check if downloaded file is a valid pdf
 wait_between_downloads=80 # wait a few seconds between repetitions on errors to prevent rate limiting
 max_tries_per_download=3 # if a download fails (or is not a valid pdf), repeat this often
 
-max_nr_of_magazines_per_year=13 # number of issues per year, e.g. ct=27, ix=13 (due to special editions)
+max_nr_of_magazines_per_year=32 # number of issues per year, e.g. ct=27, ix=13 (due to special editions)
 
 echo 'Heise Magazine Downloader v1.2'
 
@@ -60,11 +61,29 @@ sleepbar()
     printf "\33[2K\r"
 }
 
+save_article_with_chromium() {
+    local url="$1"
+    local output_path="$2"
+    local cookie_file="$3"
+
+    # Extract cookies and format for Chromium
+    local cookies=$(awk 'NF && $0 !~ /^#/ {printf("--cookie=%s=%s ", $6, $7)}' "$cookie_file")
+
+    chromium \
+        --headless \
+        --disable-gpu \
+        --no-sandbox \
+        --virtual-time-budget=10000 \
+        --print-to-pdf="$output_path" \
+        --user-data-dir=/tmp/chromium-profile-$(date +%s) \
+        "$url" $cookies
+}
+
 # Login
 echo "Logging in..."
 curlparams="--no-progress-meter -b ${curl_session_file} -c ${curl_session_file} -k -L"
 curl ${curlparams} "https://www.heise.de/sso/login" >/dev/null 2>&1
-curl ${curlparams} -F 'forward=' -F "username=${email}" -F "password=${password}" -F 'ajax=1' "https://www.heise.de/sso/login/login" -o ${curl_session_file}.html
+curl ${curlparams} -F 'forward=' -F "username=${HEISE_USERNAME}" -F "password=${HEISE_PASSWORD}" -F 'ajax=1' "https://www.heise.de/sso/login/login" -o ${curl_session_file}.html
 token1=$(cat ${curl_session_file}.html | sed "s/token/\ntoken/g" | grep ^token | head -1 | cut -f 3 -d '"')
 token2=$(cat ${curl_session_file}.html | sed "s/token/\ntoken/g" | grep ^token | head -2 | tail -1 | cut -f 3 -d '"')
 curl ${curlparams} -F "token=${token1}" "https://m.heise.de/sso/login/remote-login" >/dev/null 2>&1

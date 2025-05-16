@@ -1,8 +1,9 @@
 #!/bin/sh
 
-# User Configuration
-email='name@example.com'
-password='nutella123'
+# Read credentials from .env file if it exists
+if [ -f ".env" ]; then
+    . ./.env
+fi
 
 minimum_pdf_size=5000000 # minimum file size to check if downloaded file is a valid pdf
 wait_between_downloads=80 # wait a few seconds between repetitions on errors to prevent rate limiting
@@ -64,7 +65,7 @@ sleepbar()
 echo "Logging in..."
 curlparams="--no-progress-meter -b ${curl_session_file} -c ${curl_session_file} -k -L"
 curl ${curlparams} "https://www.heise.de/sso/login" >/dev/null 2>&1
-curl ${curlparams} -F 'forward=' -F "username=${email}" -F "password=${password}" -F 'ajax=1' "https://www.heise.de/sso/login/login" -o ${curl_session_file}.html
+curl ${curlparams} -F 'forward=' -F "username=${HEISE_USERNAME}" -F "password=${HEISE_PASSWORD}" -F 'ajax=1' "https://www.heise.de/sso/login/login" -o ${curl_session_file}.html
 token1=$(cat ${curl_session_file}.html | sed "s/token/\ntoken/g" | grep ^token | head -1 | cut -f 3 -d '"')
 token2=$(cat ${curl_session_file}.html | sed "s/token/\ntoken/g" | grep ^token | head -2 | tail -1 | cut -f 3 -d '"')
 curl ${curlparams} -F "token=${token1}" "https://m.heise.de/sso/login/remote-login" >/dev/null 2>&1

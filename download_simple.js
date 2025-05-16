@@ -1,16 +1,27 @@
 import axios from 'axios';
 import tough from 'tough-cookie';
 import { wrapper } from 'axios-cookiejar-support';
-import fs, { stat } from 'fs';
+import fs, { stat, unlink } from 'fs';
 import path from 'path';
-import { mkdirp } from 'mkdirp';
 import { program } from 'commander';
 import chalk from 'chalk';
+import { downloadFile } from './utils.js';
+
+var jar = new tough.CookieJar();
+var client = wrapper(axios.create({ jar }));
+
+
+// Read credentials from environment variables or a .env file
+dotenv.config();
+if (!process.env.HEISE_USERNAME || !process.env.HEISE_PASSWORD) {
+  console.error(chalk.red('Please set HEISE_USERNAME and HEISE_PASSWORD in your environment variables or .env file.'));
+  process.exit(1);
+}
 
 
 async function login({ username, password, cookieJarPath }) {
-  const jar = new tough.CookieJar();
-  const client = wrapper(axios.create({ jar }));
+  jar = new tough.CookieJar();
+  client = wrapper(axios.create({ jar }));
   try {
     // Initial GET request to establish session
     console.log('Logging in...');
@@ -61,30 +72,6 @@ async function login({ username, password, cookieJarPath }) {
   }
 }
 
-async function downloadFile(client, url, outputPath, maxRetries = 3) {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const response = await client.get(url, { responseType: 'stream' });
-      const statusCode = response.status;
-
-      await mkdirp(path.dirname(outputPath));
-      const writer = fs.createWriteStream(outputPath);
-      response.data.pipe(writer);
-      return new Promise((resolve, reject) => {
-        writer.on('finish', resolve);
-        writer.on('error', reject);
-      });
-    } catch (error) {
-      console.warn(`Attempt ${attempt} failed: ${error.message}`);
-      if (error.response && error.response.status === 404) {
-        console.error(chalk.red(`File not found: ${url}`));
-        return 404;
-      }
-      if (attempt === maxRetries) throw error;
-      await new Promise(res => setTimeout(res, 5000)); // Wait before retrying
-    }
-  }
-}
 
 program
   .option('-v, --verbose', 'Enable verbose output')
@@ -101,20 +88,19 @@ const [magazine, startYear, endYear = startYear] = program.args;
   if (!fs.existsSync('cookiejar.json')) {
     console.log(chalk.red('cookiejar.json not found. Logging in...'));
     await login({
-      username: 'name@example.com',
-      password: 'nutella123',
+      username,
+      password,
       cookieJarPath: 'cookiejar.json',
     });
+  } else {
+    jar = tough.CookieJar.deserializeSync(
+      JSON.parse(fs.readFileSync('cookiejar.json', 'utf-8'))
+    );
+    client = wrapper(axios.create({ jar }));
   }
 
-  // Load cookies from your cookie jar
-  const jar = tough.CookieJar.deserializeSync(
-    JSON.parse(fs.readFileSync('cookiejar.json', 'utf-8'))
-  );
-  const client = wrapper(axios.create({ jar }));
-
   for (let year = startYear; year <= endYear; year++) {
-    for (let issue = 1; issue <= 32; issue++) {
+    for (let issue = 1; issue <= 10; issue++) {
       const issueStr = String(issue).padStart(2, '0');
       const basePath = path.join(magazine, String(year), `${magazine}.${year}.${issueStr}`);
       const pdfPath = `${basePath}.pdf`;
@@ -128,12 +114,29 @@ const [magazine, startYear, endYear = startYear] = program.args;
         // Download thumbnail
         const thumbUrl = `https://heise.cloudimg.io/v7/_www-heise-de_/select/thumbnail/${magazine}/${year}/${issue}.jpg`;
         if (await downloadFile(client, thumbUrl, `${basePath}.jpg`) == 404) {
-          break;
+          continue;
         }
 
         // Fetch article numbers
         const archiveUrl = `https://www.heise.de/select/${magazine}/archiv/${year}/${issue}/download`;
-        await downloadFile(client, archiveUrl, pdfPath);
+        for (let attempt = 1; attempt <= 10; attempt++) {
+          await downloadFile(client, archiveUrl, pdfPath);
+          const fileSize = fs.statSync(pdfPath).size;
+          if (fileSize > 5000000) {
+            break;
+          }
+          // remove file if it exists
+          if (fs.existsSync(pdfPath)) {
+            fs.unlinkSync(pdfPath);
+          }
+          console.warn(`Attempt ${attempt} failed: File size is too small (${fileSize} bytes). Retrying...`);
+          await new Promise(res => setTimeout(res, 2000)); // Wait before retrying
+          // await login({
+          //   username,
+          //   password,
+          //   cookieJarPath: 'cookiejar.json',
+          // });
+        }
 
         console.log(chalk.green(`Downloaded issue: ${pdfPath}`));
       } catch (error) {
