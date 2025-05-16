@@ -6,6 +6,7 @@ import path from 'path';
 import { program } from 'commander';
 import chalk from 'chalk';
 import { downloadFile } from './utils.js';
+import dotenv from 'dotenv';
 
 var jar = new tough.CookieJar();
 var client = wrapper(axios.create({ jar }));
